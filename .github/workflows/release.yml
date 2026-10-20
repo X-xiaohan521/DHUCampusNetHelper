@@ -23,8 +23,8 @@ jobs:
 
       - name: 构建全部平台产物
         run: |
-            chmod +x build.sh
-            ./build.sh "${GITHUB_REF_NAME#v}"
+          chmod +x build.sh
+          ./build.sh "${GITHUB_REF_NAME#v}"
 
       - name: 生成 Release Notes
         run: |
@@ -35,28 +35,28 @@ jobs:
           else
             LOG=$(git log --no-merges --format='- %s' -n 20)
           fi
-          cat > release-notes.md <<NOTES
-# v${V}
-
-## 变更内容
-
-${LOG}
-
-## 各平台构建
-
-| 平台    | 架构          | 文件名                                        |
-|---------|---------------|-----------------------------------------------|
-| Linux   | x86_64        | campus-net-helper_${V}_linux-amd64            |
-| Linux   | arm64         | campus-net-helper_${V}_linux-arm64            |
-| macOS   | Intel         | campus-net-helper_${V}_darwin-amd64           |
-| macOS   | Apple Silicon | campus-net-helper_${V}_darwin-arm64           |
-| Windows | x86_64        | campus-net-helper_${V}_windows-amd64.exe      |
-
-校验文件：sha256sums.txt
-
-## 反馈
-* [Issues](https://github.com/X-xiaohan521/DHUCampusNetHelper/issues)
-NOTES
+          {
+            echo "# v${V}"
+            echo
+            echo "## 变更内容"
+            echo
+            echo "${LOG}"
+            echo
+            echo "## 各平台构建"
+            echo
+            echo "| 平台    | 架构          | 文件名                                        |"
+            echo "|---------|---------------|-----------------------------------------------|"
+            echo "| Linux   | x86_64        | campus-net-helper_${V}_linux-amd64            |"
+            echo "| Linux   | arm64         | campus-net-helper_${V}_linux-arm64            |"
+            echo "| macOS   | Intel         | campus-net-helper_${V}_darwin-amd64           |"
+            echo "| macOS   | Apple Silicon | campus-net-helper_${V}_darwin-arm64           |"
+            echo "| Windows | x86_64        | campus-net-helper_${V}_windows-amd64.exe      |"
+            echo
+            echo "校验文件：sha256sums.txt"
+            echo
+            echo "## 反馈"
+            echo "* [Issues](https://github.com/X-xiaohan521/DHUCampusNetHelper/issues)"
+          } > release-notes.md
 
       - name: 创建 Release 草稿
         uses: softprops/action-gh-release@v2
