@@ -123,7 +123,7 @@ chmod 755 /etc/init.d/campus-net-helper
 # 停止服务
 /etc/init.d/campus-net-helper stop
 
-# 查看服务日志（非常重要）
+# 查看服务日志
 logread | grep campus-net-helper
 ```
 
@@ -146,7 +146,7 @@ setx DHU_WAN_IFACE "你的网卡名称" /M   # 连接校园网的那块网卡
 
 设置完成后，重新打开一个终端，执行 `campus-net-helper.exe` 即可登录。
 
-> 临时只想手动跑一次的话，也可以在当前终端里用 `$env:DHU_USERNAME="账号"` 等方式临时设置。
+> 若仅需在当前会话中临时运行，也可以直接在终端里通过 `$env:DHU_USERNAME="账号"` 等方式进行临时设置。
 
 ### 3. 用任务计划程序开机自启
 
@@ -154,7 +154,7 @@ setx DHU_WAN_IFACE "你的网卡名称" /M   # 连接校园网的那块网卡
 
 **第一步：创建任务。**
 
-右键开始菜单，选「终端（管理员）」打开 PowerShell，把整段代码粘贴进去回车执行（`$exe`、`$work` 两行改成你存放 `campus-net-helper.exe` 的实际位置和文件夹，其余原样执行）：
+右键开始菜单，选择「终端（管理员）」打开 PowerShell，然后将整段代码粘贴进终端执行（`$exe`、`$work` 两行需更换为你实际存放 `campus-net-helper.exe` 的位置与所在文件夹，其余保持不变）：
 
 ```powershell
 # ↓↓ 这两行改成你的实际路径 ↓↓
@@ -171,19 +171,19 @@ Register-ScheduledTask -TaskName "campus-net-helper" `
   -Action $action -Trigger $trigger -Principal $principal -Settings $settings
 ```
 
-执行成功会看到类似 `State : Ready`、`TaskName : campus-net-helper` 的输出，说明任务已创建好了。
+若输出中包含 `State : Ready`、`TaskName : campus-net-helper` 等字段，则表明任务已创建完成。
 
-**第二步：验证任务能不能正常跑。**
+**第二步：验证任务能够正常启动。**
 
 ```powershell
-# 手动触发一次（相当于以后登录 Windows 时系统会做的那样）
+# 手动触发一次，效果等同于登录 Windows 时系统自动启动该任务
 Start-ScheduledTask -TaskName "campus-net-helper"
 
-# 等 5 秒后确认进程真的起来了
+# 约 5 秒后确认进程已启动
 Get-Process campus-net-helper
 ```
 
-能看到 `campus-net-helper.exe` 进程就说明配置成功了，以后每次登录 Windows 它都会自动启动，你不需要再手动开终端。
+若能看到 `campus-net-helper.exe` 进程，则表明配置已生效。此后每次登录 Windows，程序都会自动启动，无需再手动打开终端。
 
 **第三步：日常操作命令。**
 
@@ -197,11 +197,11 @@ Stop-Process -Name campus-net-helper
 # 查看计划任务状态（State 为 Ready、LastTaskResult 为 0 说明上次运行成功）
 Get-ScheduledTask -TaskName campus-net-helper
 
-# 以后不想用了，删除这个计划任务
+# 若不再需要，可删除该计划任务
 Unregister-ScheduledTask -TaskName "campus-net-helper" -Confirm:$false
 ```
 
-> 提示：任务计划程序在 `SYSTEM` 账号下运行，它读到的环境变量是**系统级**的，也就是第 2 步 `setx … /M` 写进去的那些；如果你只是临时在某个终端里用 `$env:` 设过，计划任务里的程序是读不到的，所以第 2 步不要省。
+> 说明：任务计划程序以 `SYSTEM` 账号运行，其可读取的仅为**系统级**环境变量，即第 2 步 `setx … /M` 写入的变量；若仅在单个终端中通过 `$env:` 临时设置，则计划任务内的程序无法读取这些变量，因此请务必完成第 2 步。
 
 ## macOS 用户
 
@@ -217,7 +217,7 @@ chmod +x ~/bin/campus-net-helper
 
 ### 2. 设置环境变量
 
-写入 shell 配置文件，让登录、计划任务时都能读到：
+写入 shell 配置文件，以便登录及后台任务均能读取：
 
 ```sh
 # zsh 默认读 ~/.zshrc，bash 读 ~/.bash_profile 或 ~/.bashrc
@@ -227,17 +227,17 @@ echo 'export DHU_WAN_IFACE="你的网卡名称"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-**`DHU_WAN_IFACE` 里填什么？**
+**关于 `DHU_WAN_IFACE` 的填写方式**
 
-这里要填的是 macOS 给网卡起的内部名字，长这样：`en0`、`en1` 这种「`en` + 数字」的形式，不是「Wi-Fi」「有线网络」你在系统设置里看到的名字。查法两种：
+此处应填写 macOS 为网卡分配的内部名称，其形式为 `en` 加数字，例如 `en0`、`en1`，而非「Wi-Fi」「有线网络」等系统设置中显示的端口名称。可用以下两种方式查询：
 
-- 图形界面：打开「系统设置 → 网络」，点击当前正连着的那个端口进入详情，页面左下角会有一行灰色的 `Hardware: ...`，右侧紧跟的 `en0` 之类的短名就是。
-- 终端：执行 `networksetup -listallhardwareports`，输出里每一项有两行，一行是 `Hardware Port: Wi-Fi`（或 `Ethernet`），紧跟着的下一行是 `Device: en0`，这个 `en0` 就是你要填的值。找到你正在用的那种连接方式（连 Wi-Fi 就找 Wi-Fi 那组，插网线就找 Ethernet 那组），把对应的 `Device` 值填进 `DHU_WAN_IFACE`。
+- 图形界面：打开「系统设置 → 网络」，点击当前正在使用的端口进入详情页，其左下角会以灰色小字显示 `Hardware: ...`，紧跟其后的 `en0` 等短名即为所需值。
+- 终端：执行 `networksetup -listallhardwareports`，输出中每个端口条目包含两行，第一行形如 `Hardware Port: Wi-Fi`（或 `Ethernet`），紧随其后的 `Device: en0` 中的值即为所需值。请根据你实际的连接方式（Wi-Fi 或有线）找到对应条目，将其 `Device` 值填入 `DHU_WAN_IFACE`。
 
 
 ### 3. 用 LaunchAgent 登录自启
 
-如果你希望程序在后台一直运行，以保持校园网登录状态，可以用 macOS 的 LaunchAgent 在登录时后台启动：
+若需让程序在后台持续运行以保持校园网登录状态，可借助 macOS 的 LaunchAgent 机制，在用户登录时自动于后台启动：
 
 ```sh
 mkdir -p ~/Library/LaunchAgents
@@ -265,7 +265,7 @@ cat > ~/Library/LaunchAgents/de.shorin.campus-net-helper.plist <<'EOF'
 EOF
 ```
 
-加载并管理：
+加载并进行日常管理：
 
 ```sh
 # 加载（后台启动）
@@ -277,7 +277,7 @@ launchctl unload ~/Library/LaunchAgents/de.shorin.campus-net-helper.plist
 # 查看状态
 launchctl list | grep campus-net-helper
 
-# 查看日志（非常重要）
+# 查看日志
 tail -f ~/Library/Logs/campus-net-helper.log
 ```
 
@@ -324,18 +324,18 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-保存后：
+保存后执行：
 
 ```sh
 sudo systemctl daemon-reload
 sudo systemctl enable --now campus-net-helper   # 启用 + 立即启动
 ```
 
-日常管理命令：
+以下为日常管理命令：
 
 ```sh
 sudo systemctl status   campus-net-helper   # 查看服务状态
 sudo systemctl restart  campus-net-helper   # 重启
 sudo systemctl stop     campus-net-helper   # 停止
-sudo journalctl -u      campus-net-helper   # 查看日志（非常重要）
+sudo journalctl -u      campus-net-helper   # 查看日志
 ```
