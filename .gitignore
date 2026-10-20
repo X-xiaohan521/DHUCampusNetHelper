@@ -1,2 +1,4 @@
 dist/
 campus-net-helper
+.cache
+.config

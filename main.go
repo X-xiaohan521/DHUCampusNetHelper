@@ -37,6 +37,11 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("campus-net-helper %s (commit %s, built %s)\n", version, commit, buildTime)
+		os.Exit(0)
+	}
+
 	// -- prepare to login --
 	// extract env variables, panic if not set
 	if username == "" || password == "" || iface == "" {
@@ -88,13 +93,8 @@ func main() {
 		Transport: transport,
 	}
 
-// -- supervise the session --
-// Detect whether the campus net login session has expired every probeInterval, reconnect if expired.
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Printf("campus-net-helper %s (commit %s, built %s)\n", version, commit, buildTime)
-		os.Exit(0)
-	}
-
+	// -- supervise the session --
+	// Detect whether the campus net login session has expired every probeInterval, reconnect if expired.
 	backoff := backoffInitial
 	for {
 		expired, err := sessionExpired(client)
