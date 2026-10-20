@@ -8,9 +8,6 @@
 * 自动区分 **认证过期** 和 **网络故障**，不做无效重试
 * 走正常认证流程，**无封号风险**
 
-## 手动运行
-
-
 ## 在 OpenWrt 上部署
 ### 1. 安装 `campus-net-helper` 二进制
 
@@ -100,7 +97,7 @@ start_service() {
 chmod 755 /etc/init.d/campus-net-helper
 ```
 
-启用开机自启动（这一步至关重要）：
+启用开机自启动：
 
 ```sh
 /etc/init.d/campus-net-helper enable
@@ -153,13 +150,18 @@ setx DHU_WAN_IFACE "你的网卡名称" /M   # 连接校园网的那块网卡
 
 ### 3. 用任务计划程序开机自启
 
-不注册的话关掉终端程序就没了，无法持续监测和重连。推荐用「任务计划程序」做成开机后台任务：
+如果你希望程序在后台一直运行，以保持校园网登录状态，可以用 Windows 自带的「任务计划程序」让它在你每次登录时自动后台执行，分四步：
+
+**第一步：创建任务。**
+
+右键开始菜单，选「终端（管理员）」打开 PowerShell，把整段代码粘贴进去回车执行（`$exe`、`$work` 两行改成你存放 `campus-net-helper.exe` 的实际位置和文件夹，其余原样执行）：
 
 ```powershell
-# 以管理员身份运行，把路径替换成你的实际位置
+# ↓↓ 这两行改成你的实际路径 ↓↓
 $exe  = "C:\Tools\campus-net-helper\campus-net-helper.exe"
 $work = "C:\Tools\campus-net-helper"
 
+# ↓↓↓ 以下不用改，整段一起执行 ↓↓↓
 $action    = New-ScheduledTaskAction -Execute $exe -WorkingDirectory $work
 $trigger   = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
@@ -169,21 +171,37 @@ Register-ScheduledTask -TaskName "campus-net-helper" `
   -Action $action -Trigger $trigger -Principal $principal -Settings $settings
 ```
 
-注册成功后，日常像管理普通服务一样管理它：
+执行成功会看到类似 `State : Ready`、`TaskName : campus-net-helper` 的输出，说明任务已创建好了。
+
+**第二步：验证任务能不能正常跑。**
 
 ```powershell
-# 查看是否已启动
-Get-Process campus-net-helper -ErrorAction SilentlyContinue
+# 手动触发一次（相当于以后登录 Windows 时系统会做的那样）
+Start-ScheduledTask -TaskName "campus-net-helper"
 
-# 启动
-Start-Process "C:\Tools\campus-net-helper\campus-net-helper.exe"
+# 等 5 秒后确认进程真的起来了
+Get-Process campus-net-helper
+```
+
+能看到 `campus-net-helper.exe` 进程就说明配置成功了，以后每次登录 Windows 它都会自动启动，你不需要再手动开终端。
+
+**第三步：日常操作命令。**
+
+```powershell
+# 查看是否正在运行
+Get-Process campus-net-helper -ErrorAction SilentlyContinue
 
 # 停止
 Stop-Process -Name campus-net-helper
 
-# 查看计划任务状态
+# 查看计划任务状态（State 为 Ready、LastTaskResult 为 0 说明上次运行成功）
 Get-ScheduledTask -TaskName campus-net-helper
+
+# 以后不想用了，删除这个计划任务
+Unregister-ScheduledTask -TaskName "campus-net-helper" -Confirm:$false
 ```
+
+> 提示：任务计划程序在 `SYSTEM` 账号下运行，它读到的环境变量是**系统级**的，也就是第 2 步 `setx … /M` 写进去的那些；如果你只是临时在某个终端里用 `$env:` 设过，计划任务里的程序是读不到的，所以第 2 步不要省。
 
 ## macOS 用户
 
@@ -209,11 +227,17 @@ echo 'export DHU_WAN_IFACE="你的网卡名称"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-> 注意：macOS 默认网卡名是 `en0`、`en1` 这类名字，用 `networksetup -listallhardwareports` 查一下，别照 Linux 的填。
+**`DHU_WAN_IFACE` 里填什么？**
 
-### 3. 用 LaunchAgent 登录自启（这一步至关重要）
+这里要填的是 macOS 给网卡起的内部名字，长这样：`en0`、`en1` 这种「`en` + 数字」的形式，不是「Wi-Fi」「有线网络」你在系统设置里看到的名字。查法两种：
 
-不注册的话关掉终端就没了。用 macOS 的 LaunchAgent 在登录时后台启动，并支持崩溃自动重启：
+- 图形界面：打开「系统设置 → 网络」，点击当前正连着的那个端口进入详情，页面左下角会有一行灰色的 `Hardware: ...`，右侧紧跟的 `en0` 之类的短名就是。
+- 终端：执行 `networksetup -listallhardwareports`，输出里每一项有两行，一行是 `Hardware Port: Wi-Fi`（或 `Ethernet`），紧跟着的下一行是 `Device: en0`，这个 `en0` 就是你要填的值。找到你正在用的那种连接方式（连 Wi-Fi 就找 Wi-Fi 那组，插网线就找 Ethernet 那组），把对应的 `Device` 值填进 `DHU_WAN_IFACE`。
+
+
+### 3. 用 LaunchAgent 登录自启
+
+如果你希望程序在后台一直运行，以保持校园网登录状态，可以用 macOS 的 LaunchAgent 在登录时后台启动：
 
 ```sh
 mkdir -p ~/Library/LaunchAgents
@@ -270,14 +294,14 @@ sudo mv ~/Downloads/campus-net-helper /usr/local/bin/
 sudo chmod 755 /usr/local/bin/campus-net-helper
 ```
 
-先手动确认能跑：
+先手动确认脚本能正常运行：
 
 ```sh
 DHU_USERNAME=账号 DHU_PASSWORD=密码 DHU_WAN_IFACE=网卡名 \
   /usr/local/bin/campus-net-helper
 ```
 
-### 2. 创建 systemd 服务（含环境变量和开机自启）
+### 2. 创建 systemd 服务
 
 ```ini
 # /etc/systemd/system/campus-net-helper.service
