@@ -19,6 +19,13 @@ var (
 	iface    = os.Getenv("DHU_WAN_IFACE")
 )
 
+// 版本信息，构建时通过 -ldflags "-X" 注入，未注入时保持默认值。
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
 const (
 	// probeInterval is how often the session is checked while it is healthy.
 	probeInterval = 30 * time.Second
@@ -81,8 +88,13 @@ func main() {
 		Transport: transport,
 	}
 
-	// -- supervise the session --
-	// Detect whether the campus net login session has expired every probeInterval, reconnect if expired.
+// -- supervise the session --
+// Detect whether the campus net login session has expired every probeInterval, reconnect if expired.
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("campus-net-helper %s (commit %s, built %s)\n", version, commit, buildTime)
+		os.Exit(0)
+	}
+
 	backoff := backoffInitial
 	for {
 		expired, err := sessionExpired(client)

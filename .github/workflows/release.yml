@@ -1,0 +1,125 @@
+name: Release
+
+# 仅当推送 vX.Y.Z 形式的 tag 时触发正式发版
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# 允许手动触发（例如补发），在 Actions 页面选择 workflow 后运行
+workflow_dispatch:
+  inputs:
+    version:
+      description: "构建使用的版本号（不带 v 前缀，例如 0.1.0）"
+      required: true
+      default: "0.0.0"
+
+permissions:
+  contents: write    # 用于创建/更新 GitHub Release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 让 git describe 可用，拿到完整 tag 历史
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 确定版本号
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RAW_VERSION="${{ inputs.version }}"
+          else
+            RAW_VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=${RAW_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: 构建全部平台产物
+        run: |
+            chmod +x build.sh
+            ./build.sh "${VERSION}"
+
+      - name: 校验产物清单
+        run: |
+          cd dist
+          ls -1
+          # 5 个产物 + 校验和文件必须齐全
+          for f in \
+            "campus-net-helper_${VERSION}_linux-amd64.tar.gz" \
+            "campus-net-helper_${VERSION}_linux-arm64.tar.gz" \
+            "campus-net-helper_${VERSION}_darwin-amd64.tar.gz" \
+            "campus-net-helper_${VERSION}_darwin-arm64.tar.gz" \
+            "campus-net-helper_${VERSION}_windows-amd64.zip" \
+            "sha256sums.txt"
+          do
+            [[ -f "$f" ]] || { echo "缺少产物：$f" >&2; exit 1; }
+          done
+          echo "产物齐全，校验和如下："
+          sha256sum -c sha256sums.txt
+
+      - name: 生成 Release Notes（模板占位）
+        shell: bash
+        run: |
+          cat > release-notes.md <<'NOTES'
+          # v{VERSION}
+
+          > 请补充一句话版本摘要。
+
+          ## 变更内容
+
+          ### 新功能
+          * （待补充）
+
+          ### 问题修复
+          * （待补充）
+
+          ## 各平台构建
+
+          | 平台    | 架构          | 下载                                          | 校验            |
+          |---------|---------------|-----------------------------------------------|-----------------|
+          | Linux   | x86_64        | `campus-net-helper_{VERSION}_linux-amd64.tar.gz`   | sha256sums.txt  |
+          | Linux   | arm64         | `campus-net-helper_{VERSION}_linux-arm64.tar.gz`   | sha256sums.txt  |
+          | macOS   | Apple Silicon | `campus-net-helper_{VERSION}_darwin-arm64.tar.gz`  | sha256sums.txt  |
+          | macOS   | Intel         | `campus-net-helper_{VERSION}_darwin-amd64.tar.gz`  | sha256sums.txt  |
+          | Windows | x86_64        | `campus-net-helper_{VERSION}_windows-amd64.zip`    | sha256sums.txt  |
+
+          ## 安装说明
+
+          各平台安装与开机自启步骤详见 [README](./README.md) 对应章节。
+
+          ## 快速验证
+
+          ```sh
+          ./campus-net-helper_{VERSION}_linux-amd64 --version
+          ```
+
+          ## 已知问题
+
+          * （如无则删除本节）
+          NOTES
+          # 替换占位符 {VERSION}
+          sed -i "s/{VERSION}/${VERSION}/g" release-notes.md
+
+      - name: 创建 Release（草稿，人工审校 Notes 后发布）
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${VERSION}"
+          name: "v${VERSION}"
+          draft: true            # 创建为草稿，审校 Release Notes 与产物后再点 Publish
+          generate_release_notes: false
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          file: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/sha256sums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
