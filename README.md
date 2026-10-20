@@ -129,3 +129,189 @@ chmod 755 /etc/init.d/campus-net-helper
 # 查看服务日志（非常重要）
 logread | grep campus-net-helper
 ```
+
+## Windows 用户
+
+### 1. 下载 `campus-net-helper.exe` 二进制
+
+从 `Releases` 页面下载 Windows 平台的 `campus-net-helper.exe`，解压到任意目录，例如 `C:\Tools\campus-net-helper\`。
+
+### 2. 设置环境变量
+
+将账号、密码和网卡名设置为系统环境变量（这样程序在任意目录运行、开机自启时都能读到）：
+
+```powershell
+# 以管理员身份打开 PowerShell 执行（替换为你的实际值）
+setx DHU_USERNAME "你的账号" /M
+setx DHU_PASSWORD "你的密码" /M
+setx DHU_WAN_IFACE "你的网卡名称" /M   # 连接校园网的那块网卡
+```
+
+设置完成后，重新打开一个终端，执行 `campus-net-helper.exe` 即可登录。
+
+> 临时只想手动跑一次的话，也可以在当前终端里用 `$env:DHU_USERNAME="账号"` 等方式临时设置。
+
+### 3. 用任务计划程序开机自启
+
+不注册的话关掉终端程序就没了，无法持续监测和重连。推荐用「任务计划程序」做成开机后台任务：
+
+```powershell
+# 以管理员身份运行，把路径替换成你的实际位置
+$exe  = "C:\Tools\campus-net-helper\campus-net-helper.exe"
+$work = "C:\Tools\campus-net-helper"
+
+$action    = New-ScheduledTaskAction -Execute $exe -WorkingDirectory $work
+$trigger   = New-ScheduledTaskTrigger -AtLogOn
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+Register-ScheduledTask -TaskName "campus-net-helper" `
+  -Action $action -Trigger $trigger -Principal $principal -Settings $settings
+```
+
+注册成功后，日常像管理普通服务一样管理它：
+
+```powershell
+# 查看是否已启动
+Get-Process campus-net-helper -ErrorAction SilentlyContinue
+
+# 启动
+Start-Process "C:\Tools\campus-net-helper\campus-net-helper.exe"
+
+# 停止
+Stop-Process -Name campus-net-helper
+
+# 查看计划任务状态
+Get-ScheduledTask -TaskName campus-net-helper
+```
+
+## macOS 用户
+
+### 1. 下载 `campus-net-helper` 二进制
+
+从 `Releases` 页面下载 macOS 平台的 `campus-net-helper`，放进 `PATH` 内的目录，例如 `~/bin/`：
+
+```sh
+mkdir -p ~/bin
+mv ~/Downloads/campus-net-helper ~/bin/
+chmod +x ~/bin/campus-net-helper
+```
+
+### 2. 设置环境变量
+
+写入 shell 配置文件，让登录、计划任务时都能读到：
+
+```sh
+# zsh 默认读 ~/.zshrc，bash 读 ~/.bash_profile 或 ~/.bashrc
+echo 'export DHU_USERNAME="你的账号"'   >> ~/.zshrc
+echo 'export DHU_PASSWORD="你的密码"'  >> ~/.zshrc
+echo 'export DHU_WAN_IFACE="你的网卡名称"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+> 注意：macOS 默认网卡名是 `en0`、`en1` 这类名字，用 `networksetup -listallhardwareports` 查一下，别照 Linux 的填。
+
+### 3. 用 LaunchAgent 登录自启（这一步至关重要）
+
+不注册的话关掉终端就没了。用 macOS 的 LaunchAgent 在登录时后台启动，并支持崩溃自动重启：
+
+```sh
+mkdir -p ~/Library/LaunchAgents
+cat > ~/Library/LaunchAgents/de.shorin.campus-net-helper.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key>
+  <string>de.shorin.campus-net-helper</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>source ~/.zshrc &amp;&amp; exec ~/bin/campus-net-helper</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>~/Library/Logs/campus-net-helper.log</string>
+  <key>StandardErrorPath</key>
+  <string>~/Library/Logs/campus-net-helper.err.log</string>
+</dict></plist>
+EOF
+```
+
+加载并管理：
+
+```sh
+# 加载（后台启动）
+launchctl load   ~/Library/LaunchAgents/de.shorin.campus-net-helper.plist
+
+# 卸载（停止）
+launchctl unload ~/Library/LaunchAgents/de.shorin.campus-net-helper.plist
+
+# 查看状态
+launchctl list | grep campus-net-helper
+
+# 查看日志（非常重要）
+tail -f ~/Library/Logs/campus-net-helper.log
+```
+
+## Linux 用户
+
+适用于带 systemd 的发行版（Ubuntu / Debian / Arch / Fedora 等）。
+
+### 1. 安装 `campus-net-helper` 二进制
+
+从 `Releases` 页面下载 Linux 平台二进制，放到 `/usr/local/bin/`：
+
+```sh
+sudo mv ~/Downloads/campus-net-helper /usr/local/bin/
+sudo chmod 755 /usr/local/bin/campus-net-helper
+```
+
+先手动确认能跑：
+
+```sh
+DHU_USERNAME=账号 DHU_PASSWORD=密码 DHU_WAN_IFACE=网卡名 \
+  /usr/local/bin/campus-net-helper
+```
+
+### 2. 创建 systemd 服务（含环境变量和开机自启）
+
+```ini
+# /etc/systemd/system/campus-net-helper.service
+
+[Unit]
+Description=DHU Campus Net Helper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=DHU_USERNAME=你的账号
+Environment=DHU_PASSWORD=你的密码
+Environment=DHU_WAN_IFACE=你的网卡名称
+ExecStart=/usr/local/bin/campus-net-helper
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+保存后：
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now campus-net-helper   # 启用 + 立即启动
+```
+
+日常管理命令：
+
+```sh
+sudo systemctl status   campus-net-helper   # 查看服务状态
+sudo systemctl restart  campus-net-helper   # 重启
+sudo systemctl stop     campus-net-helper   # 停止
+sudo journalctl -u      campus-net-helper   # 查看日志（非常重要）
+```
