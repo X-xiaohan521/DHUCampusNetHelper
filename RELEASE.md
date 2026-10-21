@@ -67,7 +67,7 @@ GitHub Actions 创建 Release 草稿时，会自动根据当前 `git log`（上�
 * （如无可省略）
 
 ## 反馈
-* [Issues](https://github.com/SHORiN-KiWATA/DHUCampusNetHelper/issues)
+* [Issues](https://github.com/X-xiaohan521/DHUCampusNetHelper/issues)
 ```
 
 ## 发布检查清单
